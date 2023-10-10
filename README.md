@@ -23,8 +23,8 @@ Overall, this project showcases the power of exploratory data analysis in uncove
 
 ## Technologies utilised
 
-Python
-Pandas
+- Python
+- Pandas
 
 
 ## Installation instructions
