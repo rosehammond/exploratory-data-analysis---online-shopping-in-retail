@@ -7,7 +7,8 @@
 - Technologies utilised
 - Installation instructions
 - Usage instructions
-- File structure
+- File structure of the project
+- Code structure
 - License information
 
 
@@ -33,7 +34,12 @@ Overall, this project showcases the power of exploratory data analysis in uncove
 ## Usage instructions
 
 
-## File structure
+## File structure of the project
+
+
+## Code structure
 
 
 ## License information
+
+This project is licensed under the MIT License - see the LICENSE.txt file for details.
