@@ -4,11 +4,6 @@ import pandas as pd
 import psycopg2
 import yaml
 
-#create a function which loads the credentials.yaml 
-# file and returns the data dictionary contained within. 
-# This will be be passed to your RDSDatabaseConnector as an 
-# argument which the class will use to connect to the remote database.
-
 def yaml_to_dict(filename="credentials.yaml"): 
     # Function takes in a filename as a paramenter, will default to 
     # 'credentials.yaml' if not given
@@ -82,7 +77,6 @@ class RDSDatabaseConnector:
         try:
             # Define a SQL query to select data from the "customer_activity" table
             query = "SELECT * FROM customer_activity"
-            
             # Use the execute_query method to retrieve data
             result_df = self.execute_query(query)
             return result_df
@@ -97,7 +91,8 @@ def save_dataframe_to_csv(dataframe, filename):
     except Exception as e:
         print(f"Error saving data to {filename}: {e}")
 # %%
-credentials_data = yaml_to_dict("credentials.yaml")  # Load credentials from your file
+#Load credentials from the file
+credentials_data = yaml_to_dict("credentials.yaml")  
 if credentials_data:
     db_connector = RDSDatabaseConnector(credentials_data)  # Initialize the connector
     db_connector.open_connection()  # Open the database connection
@@ -113,8 +108,6 @@ if credentials_data:
         db_connector.close_connection()  # Close the database connection
 
 # %%
-pd.set_option('display.max_columns', None)
-
 def load_data_from_csv(filename):
     try:
         dataframe = pd.read_csv(filename)
@@ -123,17 +116,65 @@ def load_data_from_csv(filename):
         print(f"Error loading data from {filename}: {e}")
         return None
 
-# Example usage:
-loaded_data = load_data_from_csv("customer_activity_data.csv")
-if loaded_data is not None:
+if __name__ == "__main__":
+    customer_df = load_data_from_csv("customer_activity_data.csv")
+    if customer_df is not None:
         # Print the shape of the DataFrame
-    print("Data shape:", loaded_data.shape)
-    
-    # Print the first few rows of the DataFrame
-    print("\nSample of the data:")
-    print(loaded_data.head())
+        print("Data shape:", customer_df.shape)
+        # Print the first few rows of the DataFrame
+        print("\nSample of the data:")
+        print(customer_df.head())
 # %%
-loaded_data.info()
-loaded_data.describe()
+class GetInformation:
 
+    def __init__(self, df=customer_df):
+        self.df = df
+
+    def get_basic_info(self):
+        
+        return self.df.info(), self.df.describe()
+    
+    def count_unique_values(self, column_name):
+        # Extract the specified column
+        column = self.df[column_name]
+        # Count the unique values
+        unique_values_count = column.value_counts().reset_index()
+        # Rename the columns
+        unique_values_count.columns = [column_name, 'Count']
+        
+        return unique_values_count
+
+#Example usage:
+basic_df_info = GetInformation(customer_df)
+basic_df_info.get_basic_info()
+basic_df_info.count_unique_values('region')
+basic_df_info.count_unique_values('month')
+
+# %%    
+
+class DataTransform:
+
+    def __init__(self, df=customer_df):
+        self.df = df
+
+    def convert_column_datatype(self, column_name, new_datatype):
+        try:
+            self.df[column_name] = self.df[column_name].astype(new_datatype)
+        except KeyError:
+            print(f"Column '{column_name}' not found in the DataFrame.")
+        except ValueError:
+            print(f"Failed to change the datatype of column '{column_name}' to {new_datatype}.")
+        return self.df
+    
+#Example usage:
+transform_data = DataTransform(customer_df)
+transform_data.convert_column_datatype('month', 'category')
+# %%
+transform_data.convert_column_datatype('visitor_type', 'category')
+# %%
+basic_df_info.count_unique_values('traffic_type')
+# %%
+customer_df.info()
+# %%
+transform_data.convert_column_datatype('region', 'category')
 # %%
