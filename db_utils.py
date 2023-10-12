@@ -2,7 +2,10 @@
 from matplotlib import pyplot as plt
 from statsmodels.graphics.gofplots import qqplot
 from scipy.stats import normaltest
+from scipy.stats import yeojohnson
+from scipy import stats
 from sqlalchemy import create_engine
+import numpy as np
 import pandas as pd
 import psycopg2
 import seaborn as sns
@@ -186,6 +189,13 @@ class DataFrameInfo:
         except KeyError:
             print(f"Column '{column_name}' not found in the DataFrame.")
 
+    def list_column_skewness(self):
+
+        print("Skewed values:")
+        numeric_columns = self.df.select_dtypes(include=[int, float]).columns
+        skewness_info = self.df[numeric_columns].skew()
+        return skewness_info
+
 # %%
 #Example usage to find out information (does not alter the data):
 basic_df_info = DataFrameInfo(customer_df)
@@ -202,7 +212,7 @@ basic_df_info.column_null_stats('product_related')
 
 class DataTransform:
 
-    def __init__(self, df=customer_df):
+    def __init__(self, df):
         self.df = df
 
     def convert_column_datatype(self, column_name, new_datatype):
@@ -248,7 +258,7 @@ class DataTransform:
         except KeyError:
             print(f"Column '{column_name}' not found in the DataFrame.")
         
-    def impute_missing_with_mean_or_median(self, column_name, method='mean'):
+    def impute_missing_with_mean_median_or_mode(self, column_name, method='mean'):
         """
         Impute missing values in a specified column with the mean or median.
 
@@ -264,6 +274,8 @@ class DataTransform:
                 impute_value = self.df[column_name].mean()
             elif method == 'median':
                 impute_value = self.df[column_name].median()
+            elif method == 'mode':
+                impute_value = self.df[column_name].mode()[0]
             else:
                 raise ValueError("Invalid imputation method. Use 'mean' or 'median'.")
             
@@ -286,6 +298,25 @@ class DataTransform:
         except KeyError:
             print(f"Column '{column_name}' not found in the DataFrame.")
 
+    def log_transform_skew(self, column_name):
+        try:
+            self.df[column_name] = self.df[column_name].map(lambda i: np.log(i) if i > 0 else 0)
+            t=sns.histplot(self.df[column_name],label="Skewness: %.2f"%(self.df[column_name].skew()) )
+            t.legend()
+        except KeyError:
+            print(f"Column '{column_name}' not found in the DataFrame.")
+
+    def yeo_johnson_transform_skew(self, column_name):
+        try:
+            yeojohnson_column = self.df[column_name]
+            yeojohnson_column = stats.yeojohnson(yeojohnson_column)
+            yeojohnson_column= pd.Series(yeojohnson_column[0])
+            t=sns.histplot(yeojohnson_column,label="Skewness: %.2f"%(yeojohnson_column.skew()) )
+            t.legend()
+            self.df[column_name] = yeojohnson_column
+        except KeyError:
+            print(f"Column '{column_name}' not found in the DataFrame.")
+
 # %%    
 # Example usage:
 transform_data = DataTransform(customer_df)
@@ -295,10 +326,13 @@ transform_data.null_value_summary()
 transform_data.drop_rows_with_missing_values('operating_systems')
 # %%
 # Convert object datatypes to category
-transform_data.convert_column_datatype(['month', 'visitor_type', 'operating_systems','region', 'browser', 'traffic_type'], 'category')
+transform_data = DataTransform(customer_df)
+transform_data.convert_column_datatype(['month', 'visitor_type', 'operating_systems','region', 'browser', 'traffic_type', 'administrative', 'informational', 'product_related'], 'category')
 #%%
+# Check operating systems now contains no non-null values
 transform_data.null_value_summary()
 # %%
+# Check objects have been converted to categories
 customer_df.info()
 # %%
 
@@ -335,6 +369,18 @@ class Plotter:
     def histogram(self, column_name, num_bins=50):
         #number of bins defaults ot 50 if not specified
         try:
+            skewed_value = self.df[column_name].skew()
+            print(f"Skew of {column_name} is: {skewed_value}")
+            if skewed_value > 2:
+                print("This indicates a strong positive skew.")
+            elif skewed_value < (-2):
+                print("This indicates a strong negative skew.")
+            elif skewed_value > 1:
+                print("This indicates a moderate positive skew.")
+            elif skewed_value < (-1):
+                print("This indicates a moderate negative skew.")
+            else:
+                print("This indicates the data is not significantly skewed.")
             print(f"Histogram for {column_name}:")
             self.df[column_name].hist(bins=num_bins)
         except KeyError:
@@ -360,6 +406,7 @@ class Plotter:
 # %%
 #Example usage:
 plot_data = Plotter(customer_df)
+#%%
 plot_data.bar_plot()
 plot_data.missing_data_heatmap()
 # %%
@@ -368,25 +415,80 @@ plot_data.histogram('product_related_duration', 100)
 plot_data.quantile_quantile_plot('product_related_duration')
 #%%
 # Impute missing values from 'product_related_duration' with median
-transform_data.impute_missing_with_mean_or_median('product_related_duration', 'median')
+transform_data.impute_missing_with_mean_median_or_mode('product_related_duration', 'median')
 #%%
 # Drop column 'administrative_duration' 
+transform_data = DataTransform(customer_df)
 transform_data.drop_column('administrative_duration')
+transform_data.drop_column('administrative')
+#%%
+# Check columns are no longer in DataFrame
+customer_df.info()
 #%%
 # Impute missing values from administrative and informational_duration with median
-basic_df_info.column_stats('administrative')
+transform_data = DataTransform(customer_df)
 basic_df_info.column_stats('informational_duration')
-transform_data.impute_missing_with_mean_or_median('administrative', 'median')
-transform_data.impute_missing_with_mean_or_median('informational_duration', 'median')
+transform_data.impute_missing_with_mean_median_or_mode('informational_duration', 'median')
 #%%
 # Find information about 'product_related' to decide how to impute
 basic_df_info.count_unique_values('product_related')
-plot_data.quantile_quantile_plot('product_related')
-plot_data.histogram('product_related')
 # %%
-# Impute missing values with the median as the mean gives a float and all other valus are int
-transform_data.impute_missing_with_mean_or_median('product_related', 'median')
+# Impute missing values with the mode as the column is now categorical
+transform_data = DataTransform(customer_df)
+transform_data.impute_missing_with_mean_median_or_mode('product_related', 'mode')
 # %%
 # Heatmap now shows no values are missing
 plot_data.missing_data_heatmap()
 #%%
+#Display the skewness for each column
+basic_df_info.list_column_skewness()
+# %%
+# Checking skewness with value and histogram for particular columns:
+plot_data.histogram('informational_duration')
+# %%
+# View some informational data
+customer_df['informational_duration'].describe()
+plot_data.quantile_quantile_plot('informational_duration')
+# %%
+# Transform the 'informational_duration' column to reduce skewness
+transform_data.log_transform_skew('informational_duration')
+# %%
+# Transform the 'exit_rates' column
+transform_data.yeo_johnson_transform_skew('exit_rates')
+transform_data.yeo_johnson_transform_skew('bounce_rates')
+transform_data.yeo_johnson_transform_skew('product_related_duration')
+transform_data.yeo_johnson_transform_skew('page_values')
+# %%
+# Check the data has been changed in the original dataframe
+basic_df_info.list_column_skewness()
+# %%
+# Used below code to check transformations before making them permanent in the dataframe
+log_population = customer_df["page_values"].map(lambda i: np.log(i) if i > 0 else 0)
+t=sns.histplot(log_population,label="Skewness: %.2f"%(log_population.skew()) )
+t.legend()
+# %%
+yeojohnson_population = customer_df["page_values"]
+yeojohnson_population = stats.yeojohnson(yeojohnson_population)
+yeojohnson_population= pd.Series(yeojohnson_population[0])
+t=sns.histplot(yeojohnson_population,label="Skewness: %.2f"%(yeojohnson_population.skew()) )
+t.legend()
+# %%
+# Drop rows that now have missing values (only 9 rows)
+transform_data.drop_rows_with_missing_values('exit_rates')
+#%%
+# Save the transformed data as a new file
+save_dataframe_to_csv(customer_df, "transformed_customer_activity_data.csv")
+# %%
+customer_df.info()
+# %%
+# Create new dataframe with updated data
+transformed_customer_df = load_data_from_csv("transformed_customer_activity_data.csv")
+# %%
+transformed_customer_df.info()
+# %%
+transform_updated_data = DataTransform(transformed_customer_df)
+transform_updated_data.convert_column_datatype(['month', 'visitor_type', 'operating_systems','region', 'browser', 'traffic_type', 'informational', 'product_related'], 'category')
+# %%
+basic_updated_df_info = DataFrameInfo(transformed_customer_df)
+basic_updated_df_info.basic_summary(6)
+# %%
