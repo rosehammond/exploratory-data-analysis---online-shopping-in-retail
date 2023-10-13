@@ -7,6 +7,7 @@ from scipy import stats
 from sqlalchemy import create_engine
 import numpy as np
 import pandas as pd
+import plotly.express as px
 import psycopg2
 import seaborn as sns
 import yaml
@@ -317,6 +318,26 @@ class DataTransform:
         except KeyError:
             print(f"Column '{column_name}' not found in the DataFrame.")
 
+    def remove_outliers_outside_bounds(self, column_name, lower_bound, upper_bound, inplace=True):
+        """
+        Remove outliers outside specified upper and lower bounds in a specified column.
+
+        Parameters:
+            column_name (str): The name of the column to remove outliers from.
+            lower_bound: The lower bound for the valid range.
+            upper_bound: The upper bound for the valid range.
+
+        Returns:
+            pd.DataFrame: The DataFrame with outliers removed.
+        """
+        try:
+            # Filter the DataFrame to keep rows within the specified bounds
+            self.df = self.df[(self.df[column_name] >= lower_bound) & (self.df[column_name] <= upper_bound)]
+            return self.df
+        except KeyError:
+            print(f"Column '{column_name}' not found in the DataFrame.")
+            return self.df
+        
 # %%    
 # Example usage:
 transform_data = DataTransform(customer_df)
@@ -403,6 +424,48 @@ class Plotter:
         plt.title('Missing Data Matrix (Heatmap)')
         plt.show()
 
+    def box_plot(self, column_name):
+        try:
+            fig = px.box(self.df, y=column_name, width=600, height=500)
+            fig.show()
+        except KeyError:
+            print(f"Column '{column_name}' not found in the DataFrame.")
+
+    def discrete_probability_distribution(self, column_name):
+        # Shows the probabilities of each possible outcome e.g. shows which is most likely to be chosen 
+        try:
+            plt.rc("axes.spines", top=False, right=False)
+            # Calculate value counts and convert to probabilities
+            probs = self.df[column_name].value_counts(normalize=True)
+            # Create bar plot
+            dpd=sns.barplot(y=probs.index, x=probs.values, color='b')
+            plt.xlabel('Values')
+            plt.ylabel('Probability')
+            plt.title(f'Discrete Probability Distribution: {column_name}')
+            plt.show()
+        except KeyError:
+            print(f"Column '{column_name}' not found in the DataFrame.")
+
+    def correlation_heatmap(self):
+        numeric_columns = self.df.select_dtypes(include=['int64', 'float64', 'bool']).columns
+        selected_df = self.df[numeric_columns]
+        fig = px.imshow(selected_df.corr(), title="Correlation heatmap")
+        fig.show()
+
+    def scatter_plot(self, column_1, column_2):
+        # Select the two columns you want to plot
+        x = self.df[column_1]
+        y = self.df[column_2]
+        # Create a scatter plot
+        plt.figure(figsize=(8, 6))
+        plt.scatter(x, y, c='b', marker='o', label='Scatter Plot')
+        plt.xlabel(column_1)
+        plt.ylabel(column_2)
+        plt.title(f'Scatter Plot of {column_1} vs {column_2}')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+
 # %%
 #Example usage:
 plot_data = Plotter(customer_df)
@@ -486,9 +549,58 @@ transformed_customer_df = load_data_from_csv("transformed_customer_activity_data
 # %%
 transformed_customer_df.info()
 # %%
+# Create an instance of the DataTransform class with updated dataframe
 transform_updated_data = DataTransform(transformed_customer_df)
+#%%
+# Convert some datatypes to category
 transform_updated_data.convert_column_datatype(['month', 'visitor_type', 'operating_systems','region', 'browser', 'traffic_type', 'informational', 'product_related'], 'category')
 # %%
+# Create an instance of the DataFrameInfo class with updated dataframe
 basic_updated_df_info = DataFrameInfo(transformed_customer_df)
 basic_updated_df_info.basic_summary(6)
+# %%
+# Create an instance of the Plotter class with updated dataframe
+plot_updated_data = Plotter(transformed_customer_df)
+# %%
+# Create box plots to check for outliers in updated dataframe
+plot_updated_data.box_plot("informational_duration")
+# %%
+# Create discrete probability distribution to see popular variables
+plot_updated_data.discrete_probability_distribution('month')
+# %%
+plot_updated_data.quantile_quantile_plot('exit_rates')
+# %%
+transformed_customer_df = transform_updated_data.remove_outliers_outside_bounds('informational_duration', -0.1000000, 8.0000000)
+# %%
+plot_updated_data = Plotter(transformed_customer_df)
+plot_updated_data.box_plot("informational_duration")
+# %%
+transformed_customer_df = transform_updated_data.remove_outliers_outside_bounds('product_related_duration', -1.0, 36.0)
+# %%
+plot_updated_data = Plotter(transformed_customer_df)
+plot_updated_data.box_plot("product_related_duration")
+# %%
+transformed_customer_df.info()
+# %%
+numeric_columns = transformed_customer_df.select_dtypes(include=['int64', 'float64', 'bool']).columns
+numeric_columns_transformed_customer_df = transformed_customer_df[numeric_columns]
+px.imshow(numeric_columns_transformed_customer_df.corr(), title="Correlation heatmap of customer dataframe")
+# %%
+transform_updated_data = DataTransform(transformed_customer_df)
+transform_updated_data.convert_column_datatype(['informational', 'product_related'], 'int64')
+# %%
+# PLot a heatmap to show the correlation values for numeric columns
+plot_updated_data = Plotter(transformed_customer_df)
+plot_updated_data.correlation_heatmap()
+# %%
+# PLot a scatter plot for columns with a correlation value > 0.7
+plot_updated_data = Plotter(transformed_customer_df)
+plot_updated_data.scatter_plot('informational_duration', 'informational')
+# %%
+plot_updated_data.scatter_plot('bounce_rates', 'exit_rates')
+# %%
+transform_updated_data.drop_column('informational_duration')
+# %%
+# Check the column has been removed
+transformed_customer_df.info()
 # %%
